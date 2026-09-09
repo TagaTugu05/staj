@@ -40,6 +40,7 @@ def status():
     return jsonify({
         "company_count": len(COMPANIES),
         "last_scan": get_last_scan(),
+        "is_scanning": scan_lock.locked(),
     })
 
 
@@ -66,4 +67,3 @@ start_scheduler()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-    
