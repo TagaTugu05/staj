@@ -85,7 +85,7 @@
 
 <script>
   // Backend'i kendi sunucunuza deploy ettikten sonra bu adresi güncelleyin:
-  const API_BASE = "https://staj-tq71.onrender.com";
+  const API_BASE = "http://localhost:5000";
 
   let allListings = [];
 
@@ -193,16 +193,62 @@
   document.getElementById('searchInput').addEventListener('input', render);
   document.getElementById('companyFilter').addEventListener('change', render);
   document.getElementById('sourceFilter').addEventListener('change', render);
-  document.getElementById('scanNowBtn').addEventListener('click', async () => {
-    document.getElementById('scanNowBtn').textContent = 'Taranıyor...';
-    try{
-      await fetch(`${API_BASE}/api/scan-now`, {method:'POST'});
+  let pollTimer = null;
+
+  function startPolling(){
+    const btn = document.getElementById('scanNowBtn');
+    if(pollTimer) clearInterval(pollTimer);
+    let elapsed = 0;
+    pollTimer = setInterval(async () => {
+      elapsed += 10;
+      const statusRes = await fetch(`${API_BASE}/api/status`).then(r => r.json()).catch(() => null);
       await loadListings();
-      await loadStatus();
-    }finally{
-      document.getElementById('scanNowBtn').textContent = 'Şimdi tara';
+      if(!statusRes || statusRes.is_scanning === false){
+        clearInterval(pollTimer);
+        pollTimer = null;
+        btn.disabled = false;
+        btn.textContent = 'Şimdi tara';
+        document.getElementById('lastScan').textContent = statusRes && statusRes.last_scan
+          ? new Date(statusRes.last_scan.ran_at + 'Z').toLocaleString('tr-TR')
+          : document.getElementById('lastScan').textContent;
+      } else {
+        btn.textContent = `Taranıyor... (${elapsed}sn)`;
+      }
+      // güvenlik payı: 15 dakikayı geçerse yine de butonu serbest bırak
+      if(elapsed >= 900){
+        clearInterval(pollTimer);
+        pollTimer = null;
+        btn.disabled = false;
+        btn.textContent = 'Şimdi tara';
+      }
+    }, 10000);
+  }
+
+  document.getElementById('scanNowBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('scanNowBtn');
+    btn.disabled = true;
+    btn.textContent = 'Tarama başlatıldı...';
+    try{
+      const res = await fetch(`${API_BASE}/api/scan-now`, {method:'POST'});
+      const data = await res.json();
+      if(data.status === 'already_running'){
+        btn.textContent = 'Zaten taranıyor...';
+      }
+      startPolling();
+    }catch(e){
+      btn.disabled = false;
+      btn.textContent = 'Şimdi tara';
     }
   });
+
+  // Sayfa açıldığında bir tarama zaten sürüyorsa (örn. otomatik zamanlayıcı tetiklemişse) yakala
+  (async () => {
+    const s = await fetch(`${API_BASE}/api/status`).then(r => r.json()).catch(() => null);
+    if(s && s.is_scanning){
+      document.getElementById('scanNowBtn').disabled = true;
+      startPolling();
+    }
+  })();
 
   loadStatus();
   loadListings();
