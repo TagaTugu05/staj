@@ -1,24 +1,21 @@
 """
-Şirket başına, her kaynak (linkedin/instagram/kariyer.net) için
-DuckDuckGo'nun herkese açık HTML arama sonuçlarını çeker.
-Login gerektirmez, hiçbir platformun API/ToS kuralını ihlal etmez.
+Şirket başına TEK sorgu ile Tavily arama API'sini kullanır
+(linkedin.com + instagram.com + kariyer.net aynı anda taranır).
+Tavily kendi altyapısını kullandığı için IP engeli / captcha sorunu olmaz.
 """
+import os
 import re
 import time
 from datetime import date
+from urllib.parse import urlparse
 
-import requests
-from bs4 import BeautifulSoup
+from tavily import TavilyClient
 
 from companies import COMPANIES, SOURCES
 from db import save_listing, log_scan, init_db, remove_expired_listings, remove_stale_listings
 from filters import is_stale_or_closed
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-}
-SEARCH_URL = "https://html.duckduckgo.com/html/"
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 
 TR_MONTHS = {
     "ocak": 1, "şubat": 2, "subat": 2, "mart": 3, "nisan": 4, "mayıs": 5,
@@ -27,9 +24,7 @@ TR_MONTHS = {
     "aralık": 12, "aralik": 12,
 }
 
-# "12.09.2026" / "12/09/2026" / "12-09-2026"
 DATE_NUMERIC_RE = re.compile(r"\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b")
-# "12 Eylül 2026" / "12 eylül"
 DATE_TEXT_RE = re.compile(
     r"\b(\d{1,2})\s+(" + "|".join(TR_MONTHS.keys()) + r")\s*(\d{4})?\b",
     re.IGNORECASE,
@@ -59,63 +54,61 @@ def guess_deadline(text):
     return None
 
 
-def search(query):
-    """Tek bir DuckDuckGo araması yapar, (başlık, url) listesi döner."""
+def detect_source(url):
+    host = urlparse(url).netloc.lower()
+    for source in SOURCES:
+        if source in host:
+            return source
+    return "diğer"
+
+
+def search_company(client, company):
+    """Bir şirket için TEK Tavily sorgusu, 3 kaynağı birden kapsayacak şekilde."""
     try:
-        resp = requests.post(SEARCH_URL, data={"q": query}, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"[HATA] arama başarısız: {query} -> {e}")
+        resp = client.search(
+            query=f'"{company}" staj başvuru',
+            search_depth="basic",
+            max_results=10,
+            include_domains=SOURCES,
+        )
+        return resp.get("results", [])
+    except Exception as e:
+        print(f"[HATA] '{company}' için Tavily araması başarısız: {e}")
         return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    results = []
-    for a in soup.select("a.result__a"):
-        title = a.get_text(strip=True)
-        url = a.get("href")
-        if title and url:
-            results.append((title, url))
-
-    if not results:
-        # Sonuç yoksa bunun "gerçekten sonuç yok" mu yoksa "engellendik" mi
-        # olduğunu ayırt etmek için sayfa içeriğine bak.
-        lower_body = resp.text.lower()
-        if "anomaly" in lower_body or "unusual traffic" in lower_body or "captcha" in lower_body:
-            print(f"[UYARI] '{query}' için DuckDuckGo bizi engellemiş olabilir (anomali/captcha sayfası döndü).")
-        else:
-            print(f"[BİLGİ] '{query}' için sonuç bulunamadı.")
-
-    return results
 
 
 def run_scan():
     init_db()
+
+    if not TAVILY_API_KEY:
+        print("[HATA] TAVILY_API_KEY tanımlı değil. Render'da Environment sekmesinden ekleyin.")
+        return 0
+
+    client = TavilyClient(api_key=TAVILY_API_KEY)
     new_count = 0
+
     for company in COMPANIES:
+        results = search_company(client, company)
         company_hits = 0
-        for source in SOURCES:
-            query = f'"{company}" staj site:{source}'
+        for r in results:
             try:
-                results = search(query)
+                title = r.get("title", "")
+                url = r.get("url", "")
+                if not title or not url:
+                    continue
+                if is_stale_or_closed(title):
+                    continue
+                deadline = guess_deadline(title)
+                if deadline and deadline < date.today().isoformat():
+                    continue
+                source = detect_source(url)
+                if save_listing(company, source, title, url, deadline):
+                    new_count += 1
+                    company_hits += 1
             except Exception as e:
-                print(f"[HATA] '{query}' sorgusunda beklenmedik hata: {e}")
-                results = []
-
-            for title, url in results:
-                try:
-                    if is_stale_or_closed(title):
-                        continue
-                    deadline = guess_deadline(title)
-                    if deadline and deadline < date.today().isoformat():
-                        continue
-                    if save_listing(company, source, title, url, deadline):
-                        new_count += 1
-                        company_hits += 1
-                except Exception as e:
-                    print(f"[HATA] '{title}' işlenirken hata: {e}")
-            time.sleep(2)  # DDG'yi yormamak için nazik bekleme
-
+                print(f"[HATA] sonuç işlenirken hata ({company}): {e}")
         print(f"[TARAMA] {company}: {company_hits} yeni ilan bulundu.")
+        time.sleep(1)  # Tavily'nin rate limitine karşı nazik bekleme
 
     removed_expired = remove_expired_listings()
     removed_stale = remove_stale_listings()
