@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "staj.db"
@@ -20,9 +20,14 @@ def init_db():
             source TEXT NOT NULL,
             title TEXT NOT NULL,
             url TEXT NOT NULL UNIQUE,
-            found_at TEXT NOT NULL
+            found_at TEXT NOT NULL,
+            deadline TEXT
         )
     """)
+    # Eski veritabanlarında deadline kolonu yoksa ekle (geriye dönük uyumluluk)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(listings)").fetchall()]
+    if "deadline" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN deadline TEXT")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS scan_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,13 +39,13 @@ def init_db():
     conn.close()
 
 
-def save_listing(company, source, title, url):
+def save_listing(company, source, title, url, deadline=None):
     """Yeni ilan ise True döner, zaten varsa False."""
     conn = get_conn()
     try:
         conn.execute(
-            "INSERT INTO listings (company, source, title, url, found_at) VALUES (?,?,?,?,?)",
-            (company, source, title, url, datetime.utcnow().isoformat()),
+            "INSERT INTO listings (company, source, title, url, found_at, deadline) VALUES (?,?,?,?,?,?)",
+            (company, source, title, url, datetime.utcnow().isoformat(), deadline),
         )
         conn.commit()
         return True
@@ -48,6 +53,20 @@ def save_listing(company, source, title, url):
         return False  # aynı url zaten kayıtlı
     finally:
         conn.close()
+
+
+def remove_expired_listings():
+    """deadline'ı bugünden önce olan ilanları siler. Kaç tane silindiğini döner."""
+    today = date.today().isoformat()
+    conn = get_conn()
+    cur = conn.execute(
+        "DELETE FROM listings WHERE deadline IS NOT NULL AND deadline < ?",
+        (today,),
+    )
+    conn.commit()
+    removed = cur.rowcount
+    conn.close()
+    return removed
 
 
 def log_scan(new_count):
