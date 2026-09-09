@@ -3,7 +3,7 @@ from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 
-from db import init_db, get_all_listings, get_last_scan
+from db import init_db, get_all_listings, get_last_scan, remove_stale_listings, remove_expired_listings
 from scraper import run_scan
 from companies import COMPANIES
 
@@ -11,6 +11,10 @@ app = Flask(__name__)
 CORS(app)  # frontend farklı bir adresten çağıracağı için gerekli
 
 init_db()
+# Yeni filtre kuralları devreye girer girmez, tam taramayı beklemeden
+# zaten kayıtlı eski/kapanmış ilanları temizle.
+remove_stale_listings()
+remove_expired_listings()
 
 scan_lock = threading.Lock()
 
