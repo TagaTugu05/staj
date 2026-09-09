@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staj Radar</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1220; --panel:#111B2E; --line:#1E2B44;
+    --amber:#FFB000; --amber-dim:#7A5600; --text:#E7ECF5; --muted:#7C8AA8;
+  }
+  body{background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  header.hero{border-bottom:1px solid var(--line); padding:2.5rem 0;}
+  header.hero h1{font-weight:700; letter-spacing:-0.02em; font-size:2.2rem;}
+  header.hero .sub{color:var(--muted); font-size:1rem;}
+  .status-bar{display:flex; gap:2rem; margin-top:1.25rem; flex-wrap:wrap;}
+  .status-item{font-family:'IBM Plex Mono',monospace; font-size:.85rem; color:var(--muted);}
+  .status-item b{color:var(--amber); font-weight:600;}
+  .controls{padding:1.25rem 0;}
+  .form-control, .form-select{background:var(--panel); border:1px solid var(--line); color:var(--text);}
+  .form-control:focus, .form-select:focus{background:var(--panel); color:var(--text); border-color:var(--amber); box-shadow:0 0 0 .2rem rgba(255,176,0,.15);}
+  .card-listing{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:1rem 1.25rem; margin-bottom:.75rem; transition:border-color .15s;}
+  .card-listing:hover{border-color:var(--amber-dim);}
+  .card-listing .company{font-weight:600; font-size:1.05rem;}
+  .badge-source{font-family:'IBM Plex Mono',monospace; font-size:.7rem; letter-spacing:.03em; border:1px solid var(--line); color:var(--muted); padding:.2rem .5rem; border-radius:4px;}
+  .card-listing a.title-link{color:var(--text); text-decoration:none;}
+  .card-listing a.title-link:hover{color:var(--amber);}
+  .found-at{font-family:'IBM Plex Mono',monospace; font-size:.75rem; color:var(--muted);}
+  .empty-state{color:var(--muted); padding:3rem 0; text-align:center; border:1px dashed var(--line); border-radius:6px;}
+  .btn-amber{background:var(--amber); color:#0B1220; font-weight:600; border:none;}
+  .btn-amber:hover{background:#e0a000; color:#0B1220;}
+  ::selection{background:var(--amber); color:#0B1220;}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <h1>Staj Radar</h1>
+    <div class="sub">Savunma sanayii, otomotiv ve teknoloji şirketlerinin staj ilanlarını tarar.</div>
+    <div class="status-bar">
+      <div class="status-item">İzlenen şirket: <b id="companyCount">—</b></div>
+      <div class="status-item">Toplam ilan: <b id="listingCount">—</b></div>
+      <div class="status-item">Son tarama: <b id="lastScan">—</b></div>
+      <button class="btn btn-sm btn-amber ms-auto" id="scanNowBtn">Şimdi tara</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="controls row g-2">
+    <div class="col-md-6">
+      <input type="text" class="form-control" id="searchInput" placeholder="Şirket veya kelime ara...">
+    </div>
+    <div class="col-md-3">
+      <select class="form-select" id="companyFilter">
+        <option value="">Tüm şirketler</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <select class="form-select" id="sourceFilter">
+        <option value="">Tüm kaynaklar</option>
+        <option value="linkedin.com">LinkedIn</option>
+        <option value="instagram.com">Instagram</option>
+        <option value="kariyer.net">Kariyer.net</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="listingsContainer" class="mt-3"></div>
+</main>
+
+<script>
+  // Backend'i kendi sunucunuza deploy ettikten sonra bu adresi güncelleyin:
+  const API_BASE = "http://localhost:5000";
+
+  let allListings = [];
+
+  async function loadStatus(){
+    try{
+      const res = await fetch(`${API_BASE}/api/status`);
+      const data = await res.json();
+      document.getElementById('companyCount').textContent = data.company_count;
+      document.getElementById('lastScan').textContent = data.last_scan
+        ? new Date(data.last_scan.ran_at + 'Z').toLocaleString('tr-TR')
+        : 'henüz taranmadı';
+    }catch(e){
+      document.getElementById('lastScan').textContent = 'API bağlantısı yok';
+    }
+  }
+
+  async function loadListings(){
+    try{
+      const res = await fetch(`${API_BASE}/api/listings`);
+      allListings = await res.json();
+      document.getElementById('listingCount').textContent = allListings.length;
+      populateCompanyFilter();
+      render();
+    }catch(e){
+      document.getElementById('listingsContainer').innerHTML =
+        `<div class="empty-state">Backend'e ulaşılamıyor. API_BASE adresini kontrol edin.</div>`;
+    }
+  }
+
+  function populateCompanyFilter(){
+    const sel = document.getElementById('companyFilter');
+    const companies = [...new Set(allListings.map(l => l.company))].sort();
+    sel.innerHTML = '<option value="">Tüm şirketler</option>' +
+      companies.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  function render(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const company = document.getElementById('companyFilter').value;
+    const source = document.getElementById('sourceFilter').value;
+
+    const filtered = allListings.filter(l =>
+      (!company || l.company === company) &&
+      (!source || l.source === source) &&
+      (!q || (l.title + l.company).toLowerCase().includes(q))
+    );
+
+    const container = document.getElementById('listingsContainer');
+    if(filtered.length === 0){
+      container.innerHTML = `<div class="empty-state">Kriterlere uyan ilan bulunamadı.</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map(l => `
+      <div class="card-listing d-flex justify-content-between align-items-start flex-wrap">
+        <div>
+          <div class="company">${l.company}</div>
+          <a class="title-link" href="${l.url}" target="_blank" rel="noopener">${l.title}</a>
+        </div>
+        <div class="text-end">
+          <span class="badge-source mono">${l.source}</span><br>
+          <span class="found-at">${new Date(l.found_at + 'Z').toLocaleString('tr-TR')}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('searchInput').addEventListener('input', render);
+  document.getElementById('companyFilter').addEventListener('change', render);
+  document.getElementById('sourceFilter').addEventListener('change', render);
+  document.getElementById('scanNowBtn').addEventListener('click', async () => {
+    document.getElementById('scanNowBtn').textContent = 'Taranıyor...';
+    try{
+      await fetch(`${API_BASE}/api/scan-now`, {method:'POST'});
+      await loadListings();
+      await loadStatus();
+    }finally{
+      document.getElementById('scanNowBtn').textContent = 'Şimdi tara';
+    }
+  });
+
+  loadStatus();
+  loadListings();
+</script>
+</body>
+</html>
