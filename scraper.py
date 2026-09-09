@@ -11,7 +11,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from companies import COMPANIES, SOURCES
-from db import save_listing, log_scan, init_db, remove_expired_listings
+from db import save_listing, log_scan, init_db, remove_expired_listings, remove_stale_listings
+from filters import is_stale_or_closed
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -84,6 +85,8 @@ def run_scan():
         for source in SOURCES:
             query = f'"{company}" staj site:{source}'
             for title, url in search(query):
+                if is_stale_or_closed(title):
+                    continue
                 deadline = guess_deadline(title)
                 # Tahmin edilen tarih bugünden önceyse, zaten süresi geçmiş demektir -> hiç kaydetme
                 if deadline and deadline < date.today().isoformat():
@@ -92,9 +95,11 @@ def run_scan():
                     new_count += 1
             time.sleep(2)  # DDG'yi yormamak için nazik bekleme
 
-    removed = remove_expired_listings()
+    removed_expired = remove_expired_listings()
+    removed_stale = remove_stale_listings()
     log_scan(new_count)
-    print(f"Tarama bitti. {new_count} yeni ilan, {removed} süresi geçmiş ilan kaldırıldı.")
+    print(f"Tarama bitti. {new_count} yeni ilan, "
+          f"{removed_expired} süresi geçmiş, {removed_stale} eski/kapanmış ilan kaldırıldı.")
     return new_count
 
 
