@@ -55,8 +55,9 @@ def scan_now():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # Her 3 saatte bir otomatik tarama -> 7/24 çalışan kısım burası
-    scheduler.add_job(run_scan_safely, "interval", hours=3, id="staj_tarama")
+    # Tavily'nin ücretsiz aylık kredisine sığmak için günde 1 tarama.
+    # Artırmak istersen "hours=24" değerini düşür ama Tavily kredin buna göre yeter mi kontrol et.
+    scheduler.add_job(run_scan_safely, "interval", hours=24, id="staj_tarama")
     scheduler.start()
 
 
