@@ -22,13 +22,23 @@
   .controls{padding:1.25rem 0;}
   .form-control, .form-select{background:var(--panel); border:1px solid var(--line); color:var(--text);}
   .form-control:focus, .form-select:focus{background:var(--panel); color:var(--text); border-color:var(--amber); box-shadow:0 0 0 .2rem rgba(255,176,0,.15);}
-  .card-listing{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:1rem 1.25rem; margin-bottom:.75rem; transition:border-color .15s;}
+  .card-listing{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:1rem 1.25rem; margin-bottom:.75rem; transition:border-color .15s; display:flex; align-items:center; justify-content:space-between; gap:1rem;}
   .card-listing:hover{border-color:var(--amber-dim);}
   .card-listing .company{font-weight:600; font-size:1.05rem;}
-  .badge-source{font-family:'IBM Plex Mono',monospace; font-size:.7rem; letter-spacing:.03em; border:1px solid var(--line); color:var(--muted); padding:.2rem .5rem; border-radius:4px;}
   .card-listing a.title-link{color:var(--text); text-decoration:none;}
   .card-listing a.title-link:hover{color:var(--amber);}
   .found-at{font-family:'IBM Plex Mono',monospace; font-size:.75rem; color:var(--muted);}
+  .deadline-text{font-family:'IBM Plex Mono',monospace; font-size:.78rem; font-weight:600; margin-top:.35rem;}
+  .deadline-urgent{color:#FF5C5C;}
+  .deadline-soon{color:#FFB000;}
+  .deadline-ok{color:#4ADE80;}
+  .deadline-unknown{color:var(--muted); font-weight:400;}
+  .source-icon{width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform .15s;}
+  .source-icon:hover{transform:scale(1.08);}
+  .source-icon svg{width:20px; height:20px;}
+  .icon-linkedin{background:#0A66C2;}
+  .icon-instagram{background:radial-gradient(circle at 30% 110%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);}
+  .icon-kariyer{background:#00A19A;}
   .empty-state{color:var(--muted); padding:3rem 0; text-align:center; border:1px dashed var(--line); border-radius:6px;}
   .btn-amber{background:var(--amber); color:#0B1220; font-weight:600; border:none;}
   .btn-amber:hover{background:#e0a000; color:#0B1220;}
@@ -112,6 +122,44 @@
       companies.map(c => `<option value="${c}">${c}</option>`).join('');
   }
 
+  const SOURCE_ICONS = {
+    "linkedin.com": {
+      cls: "icon-linkedin",
+      svg: `<svg viewBox="0 0 24 24" fill="white"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.03-1.85-3.03-1.85 0-2.14 1.45-2.14 2.94v5.66H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>`
+    },
+    "instagram.com": {
+      cls: "icon-instagram",
+      svg: `<svg viewBox="0 0 24 24" fill="white"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41 1.27-.06 1.65-.07 4.85-.07M12 0C8.74 0 8.33.01 7.05.07c-1.28.06-2.15.26-2.91.56-.79.31-1.46.72-2.13 1.38-.66.67-1.07 1.34-1.38 2.13-.3.76-.5 1.63-.56 2.91C.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.28.26 2.15.56 2.91.31.79.72 1.46 1.38 2.13.67.66 1.34 1.07 2.13 1.38.76.3 1.63.5 2.91.56 1.28.06 1.69.07 4.95.07s3.67-.01 4.95-.07c1.28-.06 2.15-.26 2.91-.56.79-.31 1.46-.72 2.13-1.38.66-.67 1.07-1.34 1.38-2.13.3-.76.5-1.63.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.28-.26-2.15-.56-2.91-.31-.79-.72-1.46-1.38-2.13-.67-.66-1.34-1.07-2.13-1.38-.76-.3-1.63-.5-2.91-.56C15.67.01 15.26 0 12 0zm0 5.84A6.16 6.16 0 1 0 12 18.16 6.16 6.16 0 0 0 12 5.84zm0 10.16A4 4 0 1 1 12 8a4 4 0 0 1 0 8zm6.4-10.4a1.44 1.44 0 1 1 0-2.88 1.44 1.44 0 0 1 0 2.88z"/></svg>`
+    },
+    "kariyer.net": {
+      cls: "icon-kariyer",
+      svg: `<svg viewBox="0 0 24 24" fill="white"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3 6.5 3.6L12 11.5 5.5 7.9 12 4.3zM5 9.4l6 3.3v6.9l-6-3.3V9.4zm8 10.2v-6.9l6-3.3v6.7l-6 3.5z"/></svg>`
+    }
+  };
+
+  function sourceIcon(source, url){
+    const s = SOURCE_ICONS[source] || SOURCE_ICONS["kariyer.net"];
+    return `<a class="source-icon ${s.cls}" href="${url}" target="_blank" rel="noopener" title="${source} üzerinde görüntüle">${s.svg}</a>`;
+  }
+
+  function deadlineHtml(deadline){
+    if(!deadline){
+      return `<span class="deadline-text deadline-unknown">Son tarih belirtilmemiş</span>`;
+    }
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const end = new Date(deadline + 'T00:00:00');
+    const days = Math.round((end - today) / 86400000);
+
+    if(days < 0) return ''; // backend zaten süresi geçenleri siliyor, güvenlik payı
+    let cls = 'deadline-ok', label;
+    if(days === 0){ cls = 'deadline-urgent'; label = 'Son gün!'; }
+    else if(days <= 2){ cls = 'deadline-urgent'; label = `${days} gün kaldı`; }
+    else if(days <= 7){ cls = 'deadline-soon'; label = `${days} gün kaldı`; }
+    else{ cls = 'deadline-ok'; label = `${days} gün kaldı`; }
+    return `<span class="deadline-text ${cls}">${label} · ${end.toLocaleDateString('tr-TR')}</span>`;
+  }
+
   function render(){
     const q = document.getElementById('searchInput').value.toLowerCase();
     const company = document.getElementById('companyFilter').value;
@@ -130,15 +178,14 @@
     }
 
     container.innerHTML = filtered.map(l => `
-      <div class="card-listing d-flex justify-content-between align-items-start flex-wrap">
+      <div class="card-listing">
         <div>
           <div class="company">${l.company}</div>
           <a class="title-link" href="${l.url}" target="_blank" rel="noopener">${l.title}</a>
+          <div>${deadlineHtml(l.deadline)}</div>
+          <div class="found-at mt-1">Bulunma: ${new Date(l.found_at + 'Z').toLocaleString('tr-TR')}</div>
         </div>
-        <div class="text-end">
-          <span class="badge-source mono">${l.source}</span><br>
-          <span class="found-at">${new Date(l.found_at + 'Z').toLocaleString('tr-TR')}</span>
-        </div>
+        ${sourceIcon(l.source, l.url)}
       </div>
     `).join('');
   }
