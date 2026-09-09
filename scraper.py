@@ -75,6 +75,16 @@ def search(query):
         url = a.get("href")
         if title and url:
             results.append((title, url))
+
+    if not results:
+        # Sonuç yoksa bunun "gerçekten sonuç yok" mu yoksa "engellendik" mi
+        # olduğunu ayırt etmek için sayfa içeriğine bak.
+        lower_body = resp.text.lower()
+        if "anomaly" in lower_body or "unusual traffic" in lower_body or "captcha" in lower_body:
+            print(f"[UYARI] '{query}' için DuckDuckGo bizi engellemiş olabilir (anomali/captcha sayfası döndü).")
+        else:
+            print(f"[BİLGİ] '{query}' için sonuç bulunamadı.")
+
     return results
 
 
@@ -82,18 +92,30 @@ def run_scan():
     init_db()
     new_count = 0
     for company in COMPANIES:
+        company_hits = 0
         for source in SOURCES:
             query = f'"{company}" staj site:{source}'
-            for title, url in search(query):
-                if is_stale_or_closed(title):
-                    continue
-                deadline = guess_deadline(title)
-                # Tahmin edilen tarih bugünden önceyse, zaten süresi geçmiş demektir -> hiç kaydetme
-                if deadline and deadline < date.today().isoformat():
-                    continue
-                if save_listing(company, source, title, url, deadline):
-                    new_count += 1
+            try:
+                results = search(query)
+            except Exception as e:
+                print(f"[HATA] '{query}' sorgusunda beklenmedik hata: {e}")
+                results = []
+
+            for title, url in results:
+                try:
+                    if is_stale_or_closed(title):
+                        continue
+                    deadline = guess_deadline(title)
+                    if deadline and deadline < date.today().isoformat():
+                        continue
+                    if save_listing(company, source, title, url, deadline):
+                        new_count += 1
+                        company_hits += 1
+                except Exception as e:
+                    print(f"[HATA] '{title}' işlenirken hata: {e}")
             time.sleep(2)  # DDG'yi yormamak için nazik bekleme
+
+        print(f"[TARAMA] {company}: {company_hits} yeni ilan bulundu.")
 
     removed_expired = remove_expired_listings()
     removed_stale = remove_stale_listings()
