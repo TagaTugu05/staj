@@ -2,6 +2,8 @@ import sqlite3
 from datetime import datetime, date
 from pathlib import Path
 
+from filters import is_stale_or_closed
+
 DB_PATH = Path(__file__).parent / "staj.db"
 
 
@@ -67,6 +69,20 @@ def remove_expired_listings():
     removed = cur.rowcount
     conn.close()
     return removed
+
+
+def remove_stale_listings():
+    """Halihazırda kaydedilmiş, eski yıla ait ya da kapanmış/duyuru niteliğindeki
+    ilanları veritabanından siler (yeni filtre kuralları eskiye de uygulanır).
+    Kaç tane silindiğini döner."""
+    conn = get_conn()
+    rows = conn.execute("SELECT id, title FROM listings").fetchall()
+    to_delete = [r["id"] for r in rows if is_stale_or_closed(r["title"])]
+    if to_delete:
+        conn.executemany("DELETE FROM listings WHERE id = ?", [(i,) for i in to_delete])
+        conn.commit()
+    conn.close()
+    return len(to_delete)
 
 
 def log_scan(new_count):
