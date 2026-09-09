@@ -42,6 +42,7 @@
   .empty-state{color:var(--muted); padding:3rem 0; text-align:center; border:1px dashed var(--line); border-radius:6px;}
   .btn-amber{background:var(--amber); color:#0B1220; font-weight:600; border:none;}
   .btn-amber:hover{background:#e0a000; color:#0B1220;}
+  .btn-amber:disabled{background:var(--amber); color:#0B1220; opacity:1; cursor:default;}
   ::selection{background:var(--amber); color:#0B1220;}
 </style>
 </head>
@@ -85,7 +86,7 @@
 
 <script>
   // Backend'i kendi sunucunuza deploy ettikten sonra bu adresi güncelleyin:
-  const API_BASE = "https://staj-tq71.onrender.com";
+  const API_BASE = "http://localhost:5000";
 
   let allListings = [];
 
